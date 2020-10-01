@@ -113,7 +113,15 @@ def unmount(shares):
 if __name__ == '__main__':
 
     banner = """
-
+        x-----------x
+        | MOUNT     |
+        | THEM      |
+        | SHARES    |
+        x-----------x
+               ||
+        (\__/) ||
+        (•ㅅ•) ||
+        / 　 づ
     """
 
     parser = argparse.ArgumentParser(description="Tool to list share and or creat local dir and mount them for searching locally")
