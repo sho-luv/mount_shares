@@ -20,7 +20,19 @@ whatever it is you are looking for till your little lazy heart is content!
 
 # Usage
 ``` 
-usage: mount_shares.py [-h] [-show] [-hidden] [-mount | -unmount] target
+./mount_shares.py 
+
+        x-----------x
+        | MOUNT     |
+        | THEM      |
+        | SHARES    |
+        x-----------x
+               ||
+        (\__/) ||
+        (•ㅅ•) ||
+        / 　 づ
+    
+usage: mount_shares.py [-h] [-show] [-mount | -unmount] target
 
 Tool to list share and or creat local dir and mount them for searching locally
 
@@ -32,4 +44,5 @@ optional arguments:
   -show       Show all shares availabel on target regardless of user access
   -mount      Mount target shares locally
   -unmount    Unmount shares for target locally
+
 ```
