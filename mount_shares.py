@@ -131,8 +131,8 @@ if __name__ == '__main__':
     parser.add_argument('-show', action='store_true', help='Show all shares availabel on target regardless of user access')
 
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('-mount', action='store_true', help='Mount target shares locally')
-    group.add_argument('-unmount', action='store_true', help='Unmount shares for target locally')
+    group.add_argument('-m','-mount', action='store_true', help='Mount target shares locally')
+    group.add_argument('-u','-unmount', action='store_true', help='Unmount shares for target locally')
 
     if len(sys.argv)==1:
         print( banner )
@@ -160,7 +160,7 @@ if __name__ == '__main__':
 
     print_shares(shares)
 
-    if options.mount is True:
+    if options.m is True:
         mount(shares)
-    elif options.unmount is True:
+    elif options.u is True:
         unmount(shares)
