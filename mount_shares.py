@@ -51,7 +51,7 @@ def mount(shares):
             
             # identify shares with read access
             if re.search("READ", share):
-                share = re.findall(r"[\w\.\$]+", share, flags=re.U)
+                share = re.findall(r"[\w\.\$\-]+", share, flags=re.U)
 
                 # pull out IP address and share name
                 directory = share[3]+"/"+share[4]
@@ -83,7 +83,7 @@ def unmount(shares):
             ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
             share = ansi_escape.sub('', share)
 
-            share = re.findall(r"[\w\.\$]+", share, flags=re.U)
+            share = re.findall(r"[\w\.\$\-]+", share, flags=re.U)
             directory = share[3]+"/"+share[4]
 
             # check if dir exist
@@ -92,21 +92,23 @@ def unmount(shares):
                 print("Can't unmount "+directory+" because it is doesn't exist!")
             else:
                 # check if dir is empty
-                if not os.listdir(directory):
-                    print(RED+"[+] "+NOCOLOR, end = '')
-                    print("Can't unmount "+directory+" because it is already empty!")
-                else:
-                    try:
-                        #subprocess.call(['umount',directory], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
-                        subprocess.call(['umount',directory])
-                        print()
-                        print(LIGHTGREEN+"[+] "+NOCOLOR, end = '')
-                        print("Unmounted: "+directory)
-                        subprocess.call(['rmdir',directory])
-                        print(LIGHTGREEN+"[+] "+NOCOLOR, end = '')
-                        print("Removed: "+directory)
-                    except:
-                        print("Unable to unmount share: "+directory)
+                if not re.findall("\$",directory):
+                    if not os.listdir(directory):
+                        print(RED+"[+] "+NOCOLOR, end = '')
+                        print("Can't unmount "+directory+" because it is already empty!")
+                        return
+                
+                try:
+                    #subprocess.call(['umount',directory], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
+                    subprocess.call(['umount',directory])
+                    print()
+                    print(LIGHTGREEN+"[+] "+NOCOLOR, end = '')
+                    print("Unmounted: "+directory)
+                    subprocess.call(['rmdir',directory])
+                    print(LIGHTGREEN+"[+] "+NOCOLOR, end = '')
+                    print("Removed: "+directory)
+                except:
+                    print("Unable to unmount share: "+directory)
     
 
 
