@@ -91,13 +91,14 @@ def unmount(shares):
                 print(RED+"[+] "+NOCOLOR, end = '')
                 print("Can't unmount "+directory+" because it is doesn't exist!")
             else:
+                """ Need to fix unmount when directories are already empty...
                 # check if dir is empty
                 if not re.findall("\$",directory):
                     if not os.listdir(directory):
                         print(RED+"[+] "+NOCOLOR, end = '')
                         print("Can't unmount "+directory+" because it is already empty!")
                         return
-                
+                """
                 try:
                     #subprocess.call(['umount',directory], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
                     subprocess.call(['umount',directory])
