@@ -157,7 +157,7 @@ if __name__ == '__main__':
     import subprocess
 
     # Look at removing dependency on CrackMapExec
-    process = subprocess.run(['cme','smb', address,'-u',username,'-p',password,'--shares'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
+    process = subprocess.run(['crackmapexec','smb', address,'-u',username,'-p',password,'--shares'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
     output = process.stdout
     shares = output.splitlines()
 
