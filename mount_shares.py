@@ -1,4 +1,4 @@
-#!/usr/bin/python3.8
+#!/usr/bin/python3
 
 # ----------------------------------
 NOCOLOR='\033[0m'
@@ -63,7 +63,8 @@ def mount(shares):
                 # check if dir is empty
                 if not os.listdir(directory):
                     try:
-                        mount = 'mount -t cifs //'+directory+' ./'+directory+' -o username='+username+',password='+password
+                        mount = 'mount -t cifs //'+directory+' ./'+directory+' -o username='+username+',password=\''+password+'\''
+                        print("Command: "+mount)
                         subprocess.call([mount], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
                         print(LIGHTGREEN+"[+] "+NOCOLOR, end = '')
                         print("Mounted "+directory+" Successfully!")
@@ -157,7 +158,7 @@ if __name__ == '__main__':
     import subprocess
 
     # Look at removing dependency on CrackMapExec
-    process = subprocess.run(['cme','smb', address,'-u',username,'-p',password,'--shares'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
+    process = subprocess.run(['crackmapexec','smb', address,'-u',username,'-p',password,'--shares'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
     output = process.stdout
     shares = output.splitlines()
 
