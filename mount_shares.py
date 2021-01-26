@@ -1,5 +1,34 @@
 #!/usr/bin/python3
 
+import os
+import sys # Used by len, exit, etc
+import argparse # Parser for command-line options, arguments and sub-commands
+
+############################################
+# by Leon Johnson
+#
+# This program is used to mount cifs shares
+# currently it uses crackmapexec to list 
+# readable shares. I then will create a dir
+# with the hostname and mount readable shares
+# inside that dir.
+#
+# Debuging:
+#       python -m pdb program.py
+#
+# this program will do the following:
+# [x] list readable shares for supplied user
+# [x] mount readable shares locally
+# [ ] mount shares with spaces correctly
+#     see CGYFS002 for example
+# [ ] if hostname isn't routable program breaks...
+#     need to ensure hostname routable via
+#     echo "search domain.local" >> /etc/resolve.conf
+# [ ] verify cerds used are valid
+# [ ] add hash support
+
+# ----------------------------------
+# Colors
 # ----------------------------------
 NOCOLOR='\033[0m'
 RED='\033[0;31m'
@@ -17,11 +46,6 @@ LIGHTBLUE='\033[1;34m'
 LIGHTPURPLE='\033[1;35m'
 LIGHTCYAN='\033[1;36m'
 WHITE='\033[1;37m'
-
-import os
-import sys # Used by len, exit, etc
-import argparse # Parser for command-line options, arguments and sub-commands
-
 
 def print_shares(shares):
     if options.show is False:
@@ -54,7 +78,8 @@ def mount(shares):
                 share = re.findall(r"[\w\.\$\-]+", share, flags=re.U)
 
                 # pull out IP address and share name
-                directory = share[3]+"/"+share[4]
+                # directory = share[1]+"/"+share[4] # mount IP Address, breaks crackmapexec, becauses it thinks its a file to load. STOP USING CME!!!
+                directory = share[3]+"/"+share[4]   # mount hostname, requires /etc/resolve.conf < "search domain.local"
 
                 # check if dir already exist if not make it
                 if not os.path.exists(directory):
@@ -64,7 +89,7 @@ def mount(shares):
                 if not os.listdir(directory):
                     try:
                         mount = 'mount -t cifs //'+directory+' ./'+directory+' -o username='+username+',password=\''+password+'\''
-                        print("Command: "+mount)
+                        #print("Command: "+mount)   # verbose
                         subprocess.call([mount], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
                         print(LIGHTGREEN+"[+] "+NOCOLOR, end = '')
                         print("Mounted "+directory+" Successfully!")
