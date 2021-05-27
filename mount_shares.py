@@ -196,7 +196,7 @@ def mount(shares):
         else:
             print_info()
             print(RED+"\t[+] "+NOCOLOR, end = '')
-            print(directory+" is not empty directory. Unable to mount")
+            print(hostnameDirectory+" is not empty directory. Unable to mount")
             return
                 
 
@@ -214,8 +214,7 @@ def unmount(shares):
             print("Can't unmount "+directory+" because it is doesn't exist!")
         else:
             try:
-                subprocess.call(['umount',directory], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
-                #subprocess.call(['umount',directory])
+                subprocess.call(['umount',directory])
                 print_info()
                 print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
                 print("Unmounted: "+directory)
