@@ -336,6 +336,7 @@ if __name__ == '__main__':
     domain, username, password, address = re.compile('(?:(?:([^/@:]*)/)?([^@:]*)(?::([^@]*))?@)?(.*)').match(
         options.target).groups('')
 
+
     #In case the password contains '@'
     if '@' in address:
         password = password + '@' + address.rpartition('@')[0]
@@ -343,6 +344,10 @@ if __name__ == '__main__':
 
     if options.target_ip is None:
         options.target_ip = address
+
+    if options.A is not None:
+        (domain, username, password) = load_smbclient_auth_file(options.A)
+        logging.debug('loaded smbclient auth file: domain=%s, username=%s, password=%s' % (repr(domain), repr(username), repr(password)))
 
     if domain is None:
         domain = ''
