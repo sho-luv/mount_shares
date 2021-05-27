@@ -36,15 +36,14 @@ smb_server = None
 #
 # [x] list readable shares for supplied user
 # [x] mount readable shares locally
-# [ ] mount shares with spaces correctly
-#     see CGYFS002 for example (might have fixed this indirectly)
+# [x] mount shares with spaces correctly
 # [x] verify creds used are valid
 # [x] remove crackmapexec dependency
 # [x] fixed /etc/resolve.conf dependency
 # [x] change default to READONLY changed with -write option
 # [x] added auth file support
 # [ ] add kerberos support to mounting shares
-# [ ] remove mount command dependency
+# [ ] remove mount command dependency if possible
 # [ ] add hash support after remove mount dependency
 #       Can't use mount command with hashes
 
@@ -148,15 +147,24 @@ def print_shares(connection):
 def mount(shares):
 
     if re.search("READ", shares):
+        # convert string into list
         share = re.findall(r"[\w\.\$\-]+", shares, flags=re.U)
+
+        # use index to extract share name with spaces until READ element in list
+        N = 'READ'
+        temp = share.index(N)
+        share = share[:temp]
+        share = ' '.join(share)
 
         # I created two variables because I wanted to name the share after the hostname
         # however if the hostname doesn't resolve the mount command errors out
         # so I use the IP address to mount the share and the hostname to name the local shares
         # otherwise you have to ensure the hostname resolves in /etc/resolve.conf
         # by adding search i.e. echo -n "search domain.local" >> /etc/resolve.conf
-        hostnameDirectory = hostname+"/"+share[0] 
-        ipDirectory = ipAddress+"/"+share[0] 
+        hostnameDirectory = hostname+"/"+share+""
+
+        # added qoutes for shares with spaces
+        ipDirectory = ipAddress+"/\""+share+"\""
 
         # check if dir already exist if not make it
         if not os.path.exists(hostnameDirectory):
@@ -180,12 +188,12 @@ def mount(shares):
                 #smbClient.createMountPoint( smbClient, directory, hostname)
                 """
                 if not options.write:
-                    mountCommand = 'mount -r -t cifs //'+ipDirectory+' ./'+hostnameDirectory+' -o username='+username+',password=\''+password+'\''
+                    mountCommand = 'mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
                 else:
                     print_info()
                     print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
                     print(RED+"Caution you mounted these shares as WRITABLE"+NOCOLOR)
-                    mountCommand = 'mount -t cifs //'+ipDirectory+' ./'+hostnameDirectory+' -o username='+username+',password=\''+password+'\''
+                    mountCommand = 'mount -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
                 subprocess.call([mountCommand], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
                 print_info()
                 print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
@@ -205,7 +213,13 @@ def unmount(shares):
     if re.search("READ", shares):
 
         share = re.findall(r"[\w\.\$\-]+", shares, flags=re.U)
-        directory = hostname+"/"+share[0]
+        # use index to extract share name with spaces until READ element in list
+        N = 'READ'
+        temp = share.index(N)
+        share = share[:temp]
+        share = ' '.join(share)
+
+        directory = hostname+"/"+share
 
         # check if dir exist
         if not os.path.exists(directory):
