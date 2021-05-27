@@ -15,16 +15,21 @@ smb_share_name = None
 smb_server = None
 
 ############################################
-# by Leon Johnson
+# by Leon Johnson aka @sho_luv
+#
+# This code uses Impacket library to mount remote 
+# shares locally. This allows us to use tools like
+# grep and other linux tools to search the shares
+# for sensitive information.
 #
 # This program is used to mount cifs shares
-# it will only list readable shars unless 
+# it will only list readable shares unless 
 # -show option is provided. To mount shares
 # It will create a directory named after
 # the hostname and mount readable shares
 # inside that dir.
 #
-# Debuging:
+# Debugging:
 #       python -m pdb program.py
 #
 # this program will do the following:
@@ -33,9 +38,12 @@ smb_server = None
 # [x] mount readable shares locally
 # [ ] mount shares with spaces correctly
 #     see CGYFS002 for example (might have fixed this indirectly)
-# [x] verify cerds used are valid
+# [x] verify creds used are valid
 # [x] remove crackmapexec dependency
 # [x] fixed /etc/resolve.conf dependency
+# [x] change default to READONLY changed with -write option
+# [x] added auth file support
+# [ ] add kerberos support to mounting shares
 # [ ] remove mount command dependency
 # [ ] add hash support after remove mount dependency
 #       Can't use mount command with hashes
@@ -177,10 +185,7 @@ def mount(shares):
                     print_info()
                     print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
                     print(RED+"Caution you mounted these shares as WRITABLE"+NOCOLOR)
-                    #print("Mounted "+hostnameDirectory+" As "+RED+"WRITABLE"+NOCOLOR+" Successfully!")
                     mountCommand = 'mount -t cifs //'+ipDirectory+' ./'+hostnameDirectory+' -o username='+username+',password=\''+password+'\''
-                #print("Command Attempted: ")   # verbose
-                #print(mountCommand)
                 subprocess.call([mountCommand], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
                 print_info()
                 print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
@@ -209,8 +214,8 @@ def unmount(shares):
             print("Can't unmount "+directory+" because it is doesn't exist!")
         else:
             try:
-                #subprocess.call(['umount',directory], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
-                subprocess.call(['umount',directory])
+                subprocess.call(['umount',directory], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
+                #subprocess.call(['umount',directory])
                 print_info()
                 print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
                 print("Unmounted: "+directory)
@@ -287,41 +292,25 @@ if __name__ == '__main__':
         / 　 づ
     """
 
-    parser = argparse.ArgumentParser(description="Tool to list share and or creat local dir and mount them for searching locally")
+    parser = argparse.ArgumentParser(description="Tool to list shares and/or create local dir to mount them for searching locally")
 
     parser.add_argument('target', action='store', help='[[domain/]username[:password]@]<targetName or address>')
-
-    parser.add_argument('-show', action='store_true', help='Show all shares availabel on target regardless of user access')
+    parser.add_argument('-show', action='store_true', help='Show all shares available (Default only show READ access shares)')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-m','-mount', action='store_true', help='Mount target shares locally')
     group.add_argument('-u','-unmount', action='store_true', help='Unmount shares for target locally')
+
     parser.add_argument('-debug', action='store_true', help='Turn DEBUG output ON')
-    parser.add_argument('-write', action='store_true', help='Mount shares as writable')
-
-
+    parser.add_argument('-write', action='store_true', help='Mount shares as WRITABLE (Default READ ONLY')
 
     group = parser.add_argument_group('authentication')
-
-    group.add_argument('-hashes', action="store", metavar = "LMHASH:NTHASH", help='NTLM hashes, format is LMHASH:NTHASH')
-    group.add_argument('-no-pass', action="store_true", help='don\'t ask for password (useful for -k)')
-    group.add_argument('-k', action="store_true", help='Use Kerberos authentication. Grabs credentials from ccache file '
-                                                       '(KRB5CCNAME) based on target parameters. If valid credentials '
-                                                       'cannot be found, it will use the ones specified in the command '
-                                                       'line')
-    group.add_argument('-aesKey', action="store", metavar = "hex key", help='AES key to use for Kerberos Authentication '
-                                                                            '(128 or 256 bits)')
-
+    group.add_argument('-A', action="store", metavar = "authfile", help="smbclient/mount.cifs-style authentication file. "
+                                                                        "See smbclient man page's -A option.")
     group = parser.add_argument_group('connection')
-
-    group.add_argument('-target-ip', action='store', metavar="ip address",
-                       help='IP Address of the target machine. If omitted it will use whatever was specified as target. '
-                            'This is useful when target is the NetBIOS name and you cannot resolve it')
     group.add_argument('-port', choices=['139', '445'], nargs='?', default='445', metavar="destination port",
                        help='Destination port to connect to SMB Server')
 
-    group.add_argument('-A', action="store", metavar = "authfile", help="smbclient/mount.cifs-style authentication file. "
-                                                                        "See smbclient man page's -A option.")
 
 
     if len(sys.argv)==1:
@@ -336,14 +325,10 @@ if __name__ == '__main__':
     domain, username, password, address = re.compile('(?:(?:([^/@:]*)/)?([^@:]*)(?::([^@]*))?@)?(.*)').match(
         options.target).groups('')
 
-
-    #In case the password contains '@'
+    # In case the password contains '@'
     if '@' in address:
         password = password + '@' + address.rpartition('@')[0]
         address = address.rpartition('@')[2]
-
-    if options.target_ip is None:
-        options.target_ip = address
 
     if options.A is not None:
         (domain, username, password) = load_smbclient_auth_file(options.A)
@@ -352,25 +337,13 @@ if __name__ == '__main__':
     if domain is None:
         domain = ''
 
-    if password == '' and username != '' and options.hashes is None and options.no_pass is False and options.aesKey is None:
+    if password == '' and username != '':
         from getpass import getpass
         password = getpass("Password:")
 
-    if options.aesKey is not None:
-        options.k = True
-
-    if options.hashes is not None:
-        lmhash, nthash = options.hashes.split(':')
-    else:
-        lmhash = ''
-        nthash = ''
-
     try:
-        smbClient = SMBConnection(address, options.target_ip, sess_port=int(options.port))
-        if options.k is True:
-            smbClient.kerberosLogin(username, password, domain, lmhash, nthash, options.aesKey, options.dc_ip )
-        else:
-            smbClient.login(username, password, domain, lmhash, nthash)
+        smbClient = SMBConnection(address, address, sess_port=int(options.port))
+        smbClient.login(username, password, domain)
 
         # get passed credentials
         userName, password, domain, lmhash, nthash, aesKey, TGT, TGS = smbClient.getCredentials()
