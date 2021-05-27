@@ -131,6 +131,11 @@ def print_shares(connection):
                     elif options.u is True:
                         unmount(share)
 
+            # clean created hostname dir
+            if options.u is True:
+                if not os.listdir(hostname):
+                    subprocess.call(['rmdir',hostname])
+
         else:
             print_info()
             print(LIGHTGREEN+"\t[+] "+NOCOLOR+"Enumerated all shares")
@@ -240,6 +245,7 @@ def unmount(shares):
                 print_info()
                 print("Unable to unmount share: "+directory)
 
+        
 
 class AuthFileSyntaxError(Exception):
 
@@ -308,11 +314,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Tool to list shares and/or create local dir to mount them for searching locally")
 
     parser.add_argument('target', action='store', help='[[domain/]username[:password]@]<targetName or address>')
-    parser.add_argument('-show', action='store_true', help='Show all shares available (Default only show READ access shares)')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-m','-mount', action='store_true', help='Mount target shares locally')
     group.add_argument('-u','-unmount', action='store_true', help='Unmount shares for target locally')
+    group.add_argument('-show', action='store_true', help='Show all shares available (Default only show READ access shares)')
 
     parser.add_argument('-debug', action='store_true', help='Turn DEBUG output ON')
     parser.add_argument('-write', action='store_true', help='Mount shares as WRITABLE (Default READ ONLY')
