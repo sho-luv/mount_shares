@@ -171,9 +171,16 @@ def mount(shares):
                     
                 #smbClient.createMountPoint( smbClient, directory, hostname)
                 """
-                mountCommand = 'mount -t cifs //'+ipDirectory+' ./'+hostnameDirectory+' -o username='+username+',password=\''+password+'\''
+                if not options.write:
+                    mountCommand = 'mount -r -t cifs //'+ipDirectory+' ./'+hostnameDirectory+' -o username='+username+',password=\''+password+'\''
+                else:
+                    print_info()
+                    print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
+                    print(RED+"Caution you mounted these shares as WRITABLE"+NOCOLOR)
+                    #print("Mounted "+hostnameDirectory+" As "+RED+"WRITABLE"+NOCOLOR+" Successfully!")
+                    mountCommand = 'mount -t cifs //'+ipDirectory+' ./'+hostnameDirectory+' -o username='+username+',password=\''+password+'\''
                 #print("Command Attempted: ")   # verbose
-                print(mountCommand)
+                #print(mountCommand)
                 subprocess.call([mountCommand], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
                 print_info()
                 print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
@@ -290,6 +297,7 @@ if __name__ == '__main__':
     group.add_argument('-m','-mount', action='store_true', help='Mount target shares locally')
     group.add_argument('-u','-unmount', action='store_true', help='Unmount shares for target locally')
     parser.add_argument('-debug', action='store_true', help='Turn DEBUG output ON')
+    parser.add_argument('-write', action='store_true', help='Mount shares as writable')
 
 
 
