@@ -216,6 +216,55 @@ def unmount(shares):
                 print("Unable to unmount share: "+directory)
 
 
+class AuthFileSyntaxError(Exception):
+
+    '''raised by load_smbclient_auth_file if it encounters a syntax error
+    while loading the smbclient-style authentication file.'''
+
+    def __init__(self, path, lineno, reason):
+        self.path=path
+        self.lineno=lineno
+        self.reason=reason
+
+    def __str__(self):
+        return 'Syntax error in auth file %s line %d: %s' % (
+            self.path, self.lineno, self.reason )
+
+def load_smbclient_auth_file(path):
+
+    '''Load credentials from an smbclient-style authentication file (used by
+    smbclient, mount.cifs and others).  returns (domain, username, password)
+    or raises AuthFileSyntaxError or any I/O exceptions.'''
+
+    lineno=0
+    domain=None
+    username=None
+    password=None
+    for line in open(path):
+        lineno+=1
+
+        line = line.strip()
+
+        if line.startswith('#') or line=='':
+            continue
+
+        parts = line.split('=',1)
+        if len(parts) != 2:
+            raise AuthFileSyntaxError(path, lineno, 'No "=" present in line')
+
+        (k,v) = (parts[0].strip(), parts[1].strip())
+
+        if k=='username':
+            username=v
+        elif k=='password':
+            password=v
+        elif k=='domain':
+            domain=v
+        else:
+            raise AuthFileSyntaxError(path, lineno, 'Unknown option %s' % repr(k))
+
+    return (domain, username, password)
+
 
 if __name__ == '__main__':
 
@@ -262,6 +311,9 @@ if __name__ == '__main__':
                             'This is useful when target is the NetBIOS name and you cannot resolve it')
     group.add_argument('-port', choices=['139', '445'], nargs='?', default='445', metavar="destination port",
                        help='Destination port to connect to SMB Server')
+
+    group.add_argument('-A', action="store", metavar = "authfile", help="smbclient/mount.cifs-style authentication file. "
+                                                                        "See smbclient man page's -A option.")
 
 
     if len(sys.argv)==1:
