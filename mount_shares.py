@@ -6,11 +6,9 @@ import argparse # Parser for command-line options, arguments and sub-commands
 import logging
 import ntpath
 import subprocess
-from cme.helpers.misc import gen_random_string
-
-from impacket.smb3structs import FILE_READ_DATA
-from impacket.smbconnection import SessionError
 from impacket import smb
+#from impacket.smb3structs import FILE_READ_DATA # unsure if I need this...
+from impacket.smbconnection import SessionError
 from impacket.smbconnection import SMBConnection # used impacket to connect to smb
 
 smb_share_name = None
@@ -66,7 +64,6 @@ def print_info():
 
 def print_shares(connection):
 
-        temp_dir = ntpath.normpath("\\" + gen_random_string()) 
         permissions = []
         shares = []
         output = []
@@ -86,8 +83,8 @@ def print_shares(connection):
                 pass
 
             try:
-                connection.createDirectory(share_name, temp_dir)
-                connection.deleteDirectory(share_name, temp_dir)
+                connection.createDirectory(share_name, "\\mytempdir_washere")
+                connection.deleteDirectory(share_name, "\\mytempdir_washere")
                 write = True
                 share_info['access'].append('WRITE')
             except SessionError:
