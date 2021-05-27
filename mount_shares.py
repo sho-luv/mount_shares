@@ -35,6 +35,7 @@ smb_server = None
 #     see CGYFS002 for example (might have fixed this indirectly)
 # [x] verify cerds used are valid
 # [x] remove crackmapexec dependency
+# [x] fixed /etc/resolve.conf dependency
 # [ ] remove mount command dependency
 # [ ] add hash support after remove mount dependency
 #       Can't use mount command with hashes
@@ -119,28 +120,7 @@ def print_shares(connection):
                     print(YELLOW+"\t"+share+NOCOLOR)
                     if options.m is True:
                         mount(share)
-                        """
-                        #print_info()
-                        #print(LIGHTGREEN+"\t[+] "+NOCOLOR+"Mount shit!")
-                        # check if dir already exist if not make it
-                        if not os.path.exists(hostname):
-                            os.makedirs(hostname)
 
-                        # check if dir is empty
-                        if not os.listdir(hostname):
-                            try:
-                                mount = 'mount -t cifs //'+hostname+' ./'+share+' -o username='+username+',password=\''+password+'\''
-                                print("Command: "+mount)   # verbose
-                                subprocess.call([mount], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
-                                print(LIGHTGREEN+"[+] "+NOCOLOR, end = '')
-                                print("Mounted //"+hostname+"/"+share+" Successfully!")
-                            except:
-                                print("Unable to mount share: "+hostname)
-                                return
-                        else:
-                            print(RED+"[+] "+NOCOLOR, end = '')
-                            print(hostname+" is not empty directory. Unable to mount")
-                        """
                     elif options.u is True:
                         unmount(share)
 
@@ -162,16 +142,20 @@ def mount(shares):
     if re.search("READ", shares):
         share = re.findall(r"[\w\.\$\-]+", shares, flags=re.U)
 
-        # pull out IP address and share name
-        # directory = share[1]+"/"+share[4] # mount IP Address, breaks crackmapexec, becauses it thinks its a file to load. STOP USING CME!!!
-        directory = hostname+"/"+share[0]   # mount hostname, requires /etc/resolve.conf < "search domain.local"
+        # I created two variables because I wanted to name the share after the hostname
+        # however if the hostname doesn't resolve the mount command errors out
+        # so I use the IP address to mount the share and the hostname to name the local shares
+        # otherwise you have to ensure the hostname resolves in /etc/resolve.conf
+        # by adding search i.e. echo -n "search domain.local" >> /etc/resolve.conf
+        hostnameDirectory = hostname+"/"+share[0] 
+        ipDirectory = ipAddress+"/"+share[0] 
 
         # check if dir already exist if not make it
-        if not os.path.exists(directory):
-            os.makedirs(directory)
+        if not os.path.exists(hostnameDirectory):
+            os.makedirs(hostnameDirectory)
 
         # check if dir is empty
-        if not os.listdir(directory):
+        if not os.listdir(hostnameDirectory):
             try:
                 """
                 # need to figure out how to use createMountPoint from smbconnection.py ->
@@ -187,15 +171,15 @@ def mount(shares):
                     
                 #smbClient.createMountPoint( smbClient, directory, hostname)
                 """
-                mountCommand = 'mount -t cifs //'+directory+' ./'+directory+' -o username='+username+',password=\''+password+'\''
+                mountCommand = 'mount -t cifs //'+ipDirectory+' ./'+hostnameDirectory+' -o username='+username+',password=\''+password+'\''
                 #print("Command Attempted: ")   # verbose
-                #print(mountCommand)
+                print(mountCommand)
                 subprocess.call([mountCommand], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
                 print_info()
                 print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
-                print("Mounted "+directory+" Successfully!")
+                print("Mounted "+hostnameDirectory+" Successfully!")
             except:
-                print("Unable to mount share: //"+directory)
+                print("Unable to mount share: //"+hostnameDirectory)
 
         else:
             print_info()
