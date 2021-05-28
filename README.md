@@ -21,7 +21,6 @@ whatever it is you are looking for till your little lazy heart is content!
 # Usage
 ``` 
 ./mount_shares.py 
-
         x-----------x
         | MOUNT     |
         | THEM      |
@@ -32,17 +31,27 @@ whatever it is you are looking for till your little lazy heart is content!
         (•ㅅ•) ||
         / 　 づ
     
-usage: mount_shares.py [-h] [-show] [-mount | -unmount] target
+usage: mount_shares.py [-h] [-m | -u | -show] [-debug] [-write] [-A authfile] [-port [destination port]] target
 
-Tool to list share and or creat local dir and mount them for searching locally
+Tool to list shares and/or create local dir to mount them for searching locally
 
 positional arguments:
-  target      [[domain/]username[:password]@]<targetName or address>
+  target                [[domain/]username[:password]@]<targetName or address>
 
 optional arguments:
-  -h, --help  show this help message and exit
-  -show       Show all shares availabel on target regardless of user access
-  -mount      Mount target shares locally
-  -unmount    Unmount shares for target locally
+  -h, --help            show this help message and exit
+  -m, -mount            Mount target shares locally
+  -u, -unmount          Unmount shares for target locally
+  -show                 Show all shares available (Default only show READ access shares)
+  -debug                Turn DEBUG output ON
+  -write                Mount shares as WRITABLE (Default READ ONLY
+
+authentication:
+  -A authfile           smbclient/mount.cifs-style authentication file. See smbclient man page's -A option.
+
+connection:
+  -port [destination port]
+                        Destination port to connect to SMB Server
+
 
 ```
