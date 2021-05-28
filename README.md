@@ -44,7 +44,7 @@ optional arguments:
   -u, -unmount          Unmount shares for target locally
   -show                 Show all shares available (Default only show READ access shares)
   -debug                Turn DEBUG output ON
-  -write                Mount shares as WRITABLE (Default READ ONLY
+  -write                Mount shares as WRITABLE (Default READ ONLY)
 
 authentication:
   -A authfile           smbclient/mount.cifs-style authentication file. See smbclient man page's -A option.
