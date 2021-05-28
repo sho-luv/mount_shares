@@ -55,3 +55,5 @@ connection:
 
 
 ```
+## Example:
+![mount_shares2](https://user-images.githubusercontent.com/1679089/120002981-290c5c00-bf8a-11eb-8d9b-f707c7d8f7f8.gif)
