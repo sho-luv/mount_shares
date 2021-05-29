@@ -10,6 +10,11 @@ from impacket import smb
 #from impacket.smb3structs import FILE_READ_DATA # unsure if I need this...
 from impacket.smbconnection import SessionError
 from impacket.smbconnection import SMBConnection # used impacket to connect to smb
+from impacket.dcerpc.v5.transport import DCERPCTransportFactory
+from impacket.dcerpc.v5.rpcrt import DCERPCException
+from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
+
+
 
 smb_share_name = None
 smb_server = None
@@ -42,6 +47,7 @@ smb_server = None
 # [x] fixed /etc/resolve.conf dependency
 # [x] change default to READONLY changed with -write option
 # [x] added auth file support
+# [x] change code to clean up all created dirs on unmount command
 # [ ] add kerberos support to mounting shares
 # [ ] remove mount command dependency if possible
 # [ ] add hash support after remove mount dependency
@@ -133,8 +139,14 @@ def print_shares(connection):
 
             # clean created hostname dir
             if options.u is True:
-                if not os.listdir(hostname):
-                    subprocess.call(['rmdir',hostname])
+                if os.path.exists(hostname):
+                    if not os.listdir(hostname):
+                        subprocess.call(['rmdir',hostname])
+                else:
+                    print_info()
+                    print(RED+"\t[+] "+NOCOLOR, end = '')
+                    print("Can't unmount "+hostname+" because it is doesn't exist!")
+
 
         else:
             print_info()
@@ -245,6 +257,28 @@ def unmount(shares):
                 print_info()
                 print("Unable to unmount share: "+directory)
 
+
+def get_os_arch():
+    try:
+        stringBinding = r'ncacn_ip_tcp:{}[135]'.format(ipAddress)
+        transport = DCERPCTransportFactory(stringBinding)
+        transport.set_connect_timeout(5)
+        dce = transport.get_dce_rpc()
+        dce.connect()
+        try:
+            dce.bind(MSRPC_UUID_PORTMAP, transfer_syntax=('71710533-BEBA-4937-8319-B5DBEF9CCC36', '1.0'))
+        except (DCERPCException, e):
+            if str(e).find('syntaxes_not_supported') >= 0:
+                dce.disconnect()
+                return "x32"
+        else:
+            dce.disconnect()
+            return "x64"
+
+    except Exception as e:
+        logging.debug('Error retrieving os arch of {}: {}'.format(ipAddress, str(e)))
+
+    return 0
         
 
 class AuthFileSyntaxError(Exception):
@@ -321,7 +355,7 @@ if __name__ == '__main__':
     group.add_argument('-show', action='store_true', help='Show all shares available (Default only show READ access shares)')
 
     parser.add_argument('-debug', action='store_true', help='Turn DEBUG output ON')
-    parser.add_argument('-write', action='store_true', help='Mount shares as WRITABLE (Default READ ONLY')
+    parser.add_argument('-write', action='store_true', help='Mount shares as WRITABLE (Default READ ONLY)')
 
     group = parser.add_argument_group('authentication')
     group.add_argument('-A', action="store", metavar = "authfile", help="smbclient/mount.cifs-style authentication file. "
@@ -373,16 +407,24 @@ if __name__ == '__main__':
         domain = smbClient.getServerDomain()
         fqdn = smbClient.getServerDNSDomainName()
         osVersion = smbClient.getServerOS()
+        os_arch = get_os_arch()
 
         print_info()
         print(LIGHTBLUE+"\t[*] "+NOCOLOR, end = '')
-        print(osVersion+" (name:"+hostname+") (domain:"+domain+")") 
-        print_info()
+        print(osVersion+" "+os_arch+" (name:"+hostname+") (domain:"+domain+")") 
 
-        if not domain:
-            print(LIGHTGREEN+"\t[+] "+NOCOLOR+hostname+"/"+userName+":"+password)
-        else:
-            print(LIGHTGREEN+"\t[+] "+NOCOLOR+domain+"/"+userName+":"+password)
+        if userName:
+            if options.A is None:
+                """
+                print_info()
+                if not domain:
+                    print(LIGHTGREEN+"\t[+] "+NOCOLOR+hostname+"/"+userName+":"+password)
+                else:
+                    print(LIGHTGREEN+"\t[+] "+NOCOLOR+domain+"/"+userName+":"+password)
+
+                # default print only readable shares
+                """
+            print_shares(smbClient)
 
         """
         print(smbClient.getServerName()) # get hostname
@@ -396,8 +438,6 @@ if __name__ == '__main__':
         smbClient.createMountPoint(smbClient, './', test_dir)
         """
 
-        # default print only readable shares
-        print_shares(smbClient)
         
     except Exception as e:
         if logging.getLogger().level == logging.DEBUG:
