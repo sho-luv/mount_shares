@@ -49,8 +49,6 @@ smb_server = None
 # [x] added auth file support
 # [x] change code to clean up all created dirs on unmount command
 # [ ] add kerberos support to mounting shares
-#       this will allow pth mounting of shares
-#       sudo mount -t cifs -o sec=krb5,vers=3.0 '//SERVER.DOMAIN.LOCAL/SHARE' /mnt/share
 # [ ] remove mount command dependency if possible
 # [ ] add hash support after remove mount dependency
 #       Can't use mount command with hashes
@@ -207,12 +205,12 @@ def mount(shares):
                 #smbClient.createMountPoint( smbClient, directory, hostname)
                 """
                 if not options.write:
-                    mountCommand = 'mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
+                    mountCommand = 'mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o credentials='+full_path
                 else:
                     print_info()
                     print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
                     print(RED+"Caution you mounted these shares as WRITABLE"+NOCOLOR)
-                    mountCommand = 'mount -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
+                    mountCommand = 'mount -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o credentials='+full_path
                 subprocess.call([mountCommand], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
                 print_info()
                 print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
@@ -374,6 +372,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     options = parser.parse_args()
+    full_path = None
 
     import re
 
@@ -384,8 +383,8 @@ if __name__ == '__main__':
     if '@' in address:
         password = password + '@' + address.rpartition('@')[0]
         address = address.rpartition('@')[2]
-
     if options.A is not None:
+        full_path = os.path.realpath(options.A)
         (domain, username, password) = load_smbclient_auth_file(options.A)
         logging.debug('loaded smbclient auth file: domain=%s, username=%s, password=%s' % (repr(domain), repr(username), repr(password)))
 
