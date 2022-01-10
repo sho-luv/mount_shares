@@ -49,6 +49,8 @@ smb_server = None
 # [x] added auth file support
 # [x] change code to clean up all created dirs on unmount command
 # [ ] add kerberos support to mounting shares
+#       this will allow pth mounting of shares
+#       sudo mount -t cifs -o sec=krb5,vers=3.0 '//SERVER.DOMAIN.LOCAL/SHARE' /mnt/share
 # [ ] remove mount command dependency if possible
 # [ ] add hash support after remove mount dependency
 #       Can't use mount command with hashes
