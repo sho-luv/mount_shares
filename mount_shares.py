@@ -207,13 +207,16 @@ def mount(shares):
                 #smbClient.createMountPoint( smbClient, directory, hostname)
                 """
                 if not options.write:
-                    mountCommand = 'mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
+                    # https://www.samba.org/~ab/output/htmldocs/manpages-3/mount.cifs.8.html
+                    # Note that a password which contains the delimiter character (i.e. a comma ',') will fail to be parsed correctly on the 
+                    # command line. However, the same password defined in the PASSWD environment variable or via a credentials file (see below) or entered at the password prompt will be read correctly.
+                    mount_command = 'PASSWD='+password+' mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username
                 else:
                     print_info()
                     print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
                     print(RED+"Caution you mounted these shares as WRITABLE"+NOCOLOR)
-                    mountCommand = 'mount -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
-                subprocess.call([mountCommand], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
+                    mount_command = 'PASSWD='+password+' mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username
+                subprocess.call([mount_command], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
                 print_info()
                 print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
                 print("Mounted "+hostnameDirectory+" Successfully!")
