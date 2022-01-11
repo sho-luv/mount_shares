@@ -413,7 +413,7 @@ if __name__ == '__main__':
 
         print_info()
         print(LIGHTBLUE+"\t[*] "+NOCOLOR, end = '')
-        print(osVersion+" "+os_arch+" (name:"+hostname+") (domain:"+domain+")") 
+        print(str(osVersion)+" "+str(os_arch)+" (name:"+hostname+") (domain:"+domain+")")
 
         if userName:
             if options.A is None:
