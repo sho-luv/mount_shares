@@ -131,12 +131,16 @@ def print_shares(connection):
 
                 if re.search("READ", share):
                     print_info()
-                    print(YELLOW+"\t"+share+NOCOLOR, end='')
-                    if options.m is True:
-                        mount(share)
+                    if(options.m is True or options.u is True):
+                        print(YELLOW+"\t"+share+NOCOLOR, end='')
+                        if options.m is True:
+                            mount(share)
 
-                    elif options.u is True:
-                        unmount(share)
+                        elif options.u is True:
+                            unmount(share)
+                    else:
+                        print(YELLOW+"\t"+share+NOCOLOR)
+
 
             # clean created hostname dir
             if options.u is True:
