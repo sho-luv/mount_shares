@@ -113,8 +113,7 @@ def print_shares(connection):
             remark = share['remark']
             perms  = share['access']
 
-            #print((u'{:<15} {:<15} {}'.format(name, ','.join(perms), remark)))
-            output = (u'{:<15} {:<15} {}'.format(name, ','.join(perms), remark))
+            output = (u'{:<15} {:<15} {:<24}'.format(name, ','.join(perms), remark))
             shares.append(''.join(output))
 
         if options.show is False:
@@ -132,7 +131,7 @@ def print_shares(connection):
 
                 if re.search("READ", share):
                     print_info()
-                    print(YELLOW+"\t"+share+NOCOLOR)
+                    print(YELLOW+"\t"+share+NOCOLOR, end='')
                     if options.m is True:
                         mount(share)
 
@@ -189,46 +188,47 @@ def mount(shares):
         if not os.path.exists(hostnameDirectory):
             os.makedirs(hostnameDirectory)
 
-        # check if dir is empty
-        if not os.listdir(hostnameDirectory):
-            try:
-                """
-                # need to figure out how to use createMountPoint from smbconnection.py ->
-                # https://github.com/SecureAuthCorp/impacket/blob/a16198c3312d8cfe25b329907b16463ea3143519/impacket/smbconnection.py#L861
-                # I want to mount a remote network share locally using the createMountPoint function. 
-                # However I'm unsure how to use this function. It's defined as follows:
-                # def createMountPoint(self, tid, path, target):
-                    #
-                    #creates a mount point at an existing directory
-                    #:param int tid: tree id of current connection
-                    #:param string path: directory at which to create mount point (must already exist)
-                    #:param string target: target address of mount point
-                    
-                #smbClient.createMountPoint( smbClient, directory, hostname)
-                """
-                if not options.write:
-                    # https://www.samba.org/~ab/output/htmldocs/manpages-3/mount.cifs.8.html
-                    # Note that a password which contains the delimiter character (i.e. a comma ',') will fail to be parsed correctly on the 
-                    # command line. However, the same password defined in the PASSWD environment variable or via a credentials file (see below) or entered at the password prompt will be read correctly.
-                    mount_command = 'PASSWD='+password+' mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username
-                else:
-                    print_info()
-                    print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
-                    print(RED+"Caution you mounted these shares as WRITABLE"+NOCOLOR)
-                    mount_command = 'PASSWD='+password+' mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username
-                subprocess.call([mount_command], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
-                print_info()
-                print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
-                print("Mounted "+hostnameDirectory+" Successfully!")
-            except:
-                print("Unable to mount share: //"+hostnameDirectory)
+            # check if dir is empty
+            if not os.listdir(hostnameDirectory):
+                try:
+                    """
+                    # need to figure out how to use createMountPoint from smbconnection.py ->
+                    # https://github.com/SecureAuthCorp/impacket/blob/a16198c3312d8cfe25b329907b16463ea3143519/impacket/smbconnection.py#L861
+                    # I want to mount a remote network share locally using the createMountPoint function. 
+                    # However I'm unsure how to use this function. It's defined as follows:
+                    # def createMountPoint(self, tid, path, target):
+                        #
+                        #creates a mount point at an existing directory
+                        #:param int tid: tree id of current connection
+                        #:param string path: directory at which to create mount point (must already exist)
+                        #:param string target: target address of mount point
+                        
+                    #smbClient.createMountPoint( smbClient, directory, hostname)
+                    """
+                    if not options.write:
+                        # https://www.samba.org/~ab/output/htmldocs/manpages-3/mount.cifs.8.html
+                        # Note that a password which contains the delimiter character (i.e. a comma ',') will fail to be parsed correctly on the 
+                        # command line. However, the same password defined in the PASSWD environment variable or via a credentials file (see below) or entered at the password prompt will be read correctly.
+                        mount_command = 'PASSWD='+password+' mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username
+                    else:
+                        print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
+                        print(RED+"Caution you mounted these shares as WRITABLE"+NOCOLOR)
+                        mount_command = 'PASSWD='+password+' mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username
+                    subprocess.call([mount_command], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
+                    print(LIGHTGREEN+'[+] '+NOCOLOR, end = '')
+                    print("Mounted: "+hostnameDirectory+" Successfully!")
+                except:
+                    print("Unable to mount share: //"+hostnameDirectory)
 
-        else:
-            print_info()
-            print(RED+"\t[+] "+NOCOLOR, end = '')
-            print(hostnameDirectory+" is not empty directory. Unable to mount")
-            return
+            else:
+                print(RED+"[+] "+NOCOLOR, end = '')
+                print(hostnameDirectory+" is not empty directory. Unable to mount")
+                return
                 
+        else:
+            print(RED+"[+] "+NOCOLOR, end = '')
+            print(hostnameDirectory+" directory already exists. Unable to mount")
+            return
 
 def unmount(shares):
 
@@ -245,19 +245,14 @@ def unmount(shares):
 
         # check if dir exist
         if not os.path.exists(directory):
-            print_info()
-            print(RED+"\t[+] "+NOCOLOR, end = '')
-            print("Can't unmount "+directory+" because it is doesn't exist!")
+            print(RED+"[+] "+NOCOLOR, end = '')
+            print("Can't unmount "+directory+" because it doesn't exist!")
         else:
             try:
                 subprocess.call(['umount',directory])
-                print_info()
-                print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
+                print(LIGHTGREEN+"[+] "+NOCOLOR, end = '')
                 print("Unmounted: "+directory)
                 subprocess.call(['rmdir',directory])
-                print_info()
-                print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
-                print("Removed: "+directory)
             except:
                 print_info()
                 print("Unable to unmount share: "+directory)
@@ -411,8 +406,8 @@ if __name__ == '__main__':
         ipAddress = smbClient.getRemoteHost()
         domain = smbClient.getServerDomain()
         fqdn = smbClient.getServerDNSDomainName()
-        osVersion = smbClient.getServerOS()
-        os_arch = get_os_arch()
+        osVersion = str(smbClient.getServerOS())
+        os_arch = str(get_os_arch())
 
         print_info()
         print(LIGHTBLUE+"\t[*] "+NOCOLOR, end = '')
