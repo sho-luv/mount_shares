@@ -520,6 +520,9 @@ if __name__ == '__main__':
         share = smb(options, domain, username, password, address)
         if share.create_conn_obj():
             share.get_info()
+        else:
+            print(YELLOW+"Can't connect to "+share.hostname+NOCOLOR)
+            exit()
 
         share.print_info()
         share.print_host_info()
