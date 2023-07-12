@@ -10,7 +10,9 @@
 Are you tired of manually mounting shares one by one? Do you have a hard time remembering the syntax to mount shares or to search shares with tools like CrackMapExec!? 
 Well you are not alone!
 
-This tool is modled after the Impacket suite. It takes a username and password and target information. It then checks to see if the usernamem and password provided allow 
+This tool is modeled after the Impacket suite. It takes a username and password and target information. It then checks to see if the usernamem and password provided allow 
+In addition, if you provide a filepath containing a newline-separated list of hosts or IPs, the script will
+attempt to perform the desired action against all of them one after another.
 access to any shares on the target system you provided. If there are any readable shares it will list them. 
 
 But wait there is more!
@@ -36,7 +38,8 @@ usage: mount_shares.py [-h] [-m | -u | -show] [-debug] [-write] [-A authfile] [-
 Tool to list shares and/or create local dir to mount them for searching locally
 
 positional arguments:
-  target                [[domain/]username[:password]@]<targetName or address>
+  target                [[domain/]username[:password]@]<targetName, address, or line-delimited file containing list of hosts>
+
 
 optional arguments:
   -h, --help            show this help message and exit

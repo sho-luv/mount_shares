@@ -373,6 +373,32 @@ class smb:
                 except:
                     print("Unable to unmount share: "+directory)
 
+def do_mounts(options, domain, password, target_var):
+    targets = []
+    if os.path.exists(target_var):  # check to see if a file was provided instead of an address
+        with open(target_var,'r') as fh:
+            targets = [line.strip() for line in fh.readlines()]
+    else:
+        targets.append(target_var)
+    for address in targets:
+        try:
+            share = smb(options, domain, username, password, address)
+            if share.create_conn_obj():
+                share.get_info()
+            else:
+                print(YELLOW+"Can't connect to "+share.hostname+NOCOLOR)
+                exit()
+
+            share.print_info()
+            share.print_host_info()
+            if username:
+                share.print_shares()
+
+        except Exception as e:
+            if logging.getLogger().level == logging.DEBUG:
+                import traceback
+                traceback.print_exc()
+            logging.error(str(e))
 
 def get_os_arch(self):
     try:
@@ -465,7 +491,7 @@ if __name__ == '__main__':
             ="Tool to list shares and/or create local dir to mount them for searching locally")
 
     parser.add_argument('target', action='store', help
-            ='[[domain/]username[:password]@]<targetName or address>')
+            ='[[domain/]username[:password]@]<targetName, address, or line-delimited file containing list of hosts>') 
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-m','-mount', action='store_true', help
@@ -519,22 +545,4 @@ if __name__ == '__main__':
     if password == '' and username != '':
         from getpass import getpass
         password = getpass("Password:")
-
-    try:
-        share = smb(options, domain, username, password, address)
-        if share.create_conn_obj():
-            share.get_info()
-        else:
-            print(YELLOW+"Can't connect to "+share.hostname+NOCOLOR)
-            exit()
-
-        share.print_info()
-        share.print_host_info()
-        if username:
-            share.print_shares()
-        
-    except Exception as e:
-        if logging.getLogger().level == logging.DEBUG:
-            import traceback
-            traceback.print_exc()
-        logging.error(str(e))
+    do_mounts(options, domain, password, address)
