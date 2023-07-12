@@ -5,8 +5,8 @@ import sys # Used by len, exit, etc
 import argparse # Parser for command-line options, arguments and sub-commands
 import socket
 import logging
-import ntpath
 import subprocess
+import re
 from impacket import smb
 #from impacket.smb3structs import FILE_READ_DATA # unsure if I need this...
 #from impacket.smbconnection import SessionError
@@ -72,6 +72,9 @@ LIGHTBLUE='\033[1;34m'
 LIGHTPURPLE='\033[1;35m'
 LIGHTCYAN='\033[1;36m'
 WHITE='\033[1;37m'
+
+
+READ = 'READ'
 
 # set logging error to remove ERROR:root:
 logger = logging.getLogger(__name__)
@@ -236,18 +239,17 @@ class smb:
                 self.print_info()
                 print(YELLOW+"\t-----\t\t-----------\t------"+NOCOLOR)
                 for share in shares:
-
                     # no need to mount IPC share so we skip it!
                     if re.search("IPC", share):
-                       continue
+                        continue
 
                     if re.search("READ", share):
                         if options.m is True:
                             self.print_info()
-                            print(YELLOW+"\t"+share+NOCOLOR, end='')
+                            print(f"{YELLOW}\t{share}{NOCOLOR}")
+                            share_name = share.split("   ")[0]
                             if not self.mount(share):
-                                print(RED+"\t[+] "+NOCOLOR, end = '')
-                                print("Can't mount "+self.hostname+" because it already exist!")
+                                print(f"{RED}\t[+] {NOCOLOR}Failed to mount {share_name}.")
 
                         elif options.u is True:
                             self.print_info()
@@ -262,8 +264,7 @@ class smb:
                 if options.u is True:
                     if os.path.exists(self.hostname):
                         if not os.listdir(self.hostname):
-                            subprocess.call(['rmdir',self.hostname])
-
+                            os.rmdir(self.hostname)
 
             else:
                 self.print_info()
@@ -279,78 +280,82 @@ class smb:
             print(NOCOLOR)
 
     def mount(self, shares):
-
-        if re.search("READ", shares):
+        if re.search("READ", shares) == False:
+            print(f"No read permissions found for this share, skipping.{NOCOLOR}")
+            return False
             # convert string into list
-            share = re.findall(r"[\w\.\$\-]+", shares, flags=re.U)
+        share = re.findall(r"[\w\.\$\-]+", shares, flags=re.U)
 
-            # use index to extract share name with spaces until READ element in list
-            N = 'READ'
-            temp = share.index(N)
-            share = share[:temp]
-            share = ' '.join(share)
+        # use index to extract share name with spaces until READ element in list
+        temp = share.index(READ)
+        share = share[:temp]
+        share = ' '.join(share)
 
-            # I created two variables because I wanted to name the share after the hostname
-            # however if the hostname doesn't resolve the mount command errors out
-            # so I use the IP address to mount the share and the hostname to name the local shares
-            # otherwise you have to ensure the hostname resolves in /etc/resolve.conf
-            # by adding search i.e. echo -n "search domain.local" >> /etc/resolve.conf
-            hostnameDirectory = self.hostname+"/"+share+""
+        # I created two variables because I wanted to name the share after the hostname
+        # however if the hostname doesn't resolve the mount command errors out
+        # so I use the IP address to mount the share and the hostname to name the local shares
+        # otherwise you have to ensure the hostname resolves in /etc/resolve.conf
+        # by adding search i.e. echo -n "search domain.local" >> /etc/resolve.conf
+        hostnameDirectory = self.hostname+"/"+share+""
 
-            # added qoutes for shares with spaces
-            ipDirectory = self.ipAddress+"/\""+share+"\""
+        # added qoutes for shares with spaces
+        ipDirectory = self.ipAddress+"/\""+share+"\""
 
-            # check if dir already exist if not make it
-            if not os.path.exists(hostnameDirectory):
-                os.makedirs(hostnameDirectory)
+        # check if dir already exist if not make it
+        try:
+            # remove the empty dir, if it exists
+            os.rmdir(hostnameDirectory)
+        except FileNotFoundError:
+            # do nothing, this is what we want to see
+            pass
+        except OSError:
+            print(f"\t{RED}[-] {NOCOLOR}The directory '{hostnameDirectory}' exists and is not empty, clear this first, skipping.",
+                  file=sys.stderr)
+            return False
 
-                # check if dir is empty if not create shares and mount them
-                if not os.listdir(hostnameDirectory):
-                    try:
-                        """
-                        # need to figure out how to use createMountPoint from smbconnection.py ->
-                        # https://github.com/SecureAuthCorp/impacket/blob/a16198c3312d8cfe25b329907b16463ea3143519/impacket/smbconnection.py#L861
-                        # I want to mount a remote network share locally using the createMountPoint function. 
-                        # However I'm unsure how to use this function. It's defined as follows:
-                        # def createMountPoint(self, tid, path, target):
-                            #
-                            #creates a mount point at an existing directory
-                            #:param int tid: tree id of current connection
-                            #:param string path: directory at which to create mount point (must already exist)
-                            #:param string target: target address of mount point
-                            
-                        #smbClient.createMountPoint( smbClient, directory, hostname)
-                        """
-                        print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
-                        if not options.write:
-                            print("Mounted "+hostnameDirectory+" Successfully!")
-                            mountCommand = 'mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
-                        else:
-                            print("Mounted "+hostnameDirectory+" Successfully!", end="")
-                            print(RED+" Caution mounted WRITABLE shares!"+NOCOLOR)
-                            mountCommand = 'mount -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
-                        subprocess.call([mountCommand], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
-                        return True
-                    except:
-                        print("Unable to mount share: //"+hostnameDirectory)
 
-                else:
-                    self.print_info()
-                    self.print_host_info()
-                    print(RED+"\t[+] "+NOCOLOR, end = '')
-                    print(self.hostnameDirectory+" is not empty directory. Unable to mount")
+        os.makedirs(hostnameDirectory)
+        try:
+            """
+            # need to figure out how to use createMountPoint from smbconnection.py ->
+            # https://github.com/SecureAuthCorp/impacket/blob/a16198c3312d8cfe25b329907b16463ea3143519/impacket/smbconnection.py#L861
+            # I want to mount a remote network share locally using the createMountPoint function. 
+            # However I'm unsure how to use this function. It's defined as follows:
+            # def createMountPoint(self, tid, path, target):
+                #
+                #creates a mount point at an existing directory
+                #:param int tid: tree id of current connection
+                #:param string path: directory at which to create mount point (must already exist)
+                #:param string target: target address of mount point
+                
+            #smbClient.createMountPoint( smbClient, directory, hostname)
+            """
+            if not options.write:
+                mountCommand = 'mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
+            else:
+                print(RED+" Caution mounted WRITABLE shares!"+NOCOLOR, end="")
+                mountCommand = 'mount -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
+            result = subprocess.call([mountCommand], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
+            if result == 0:  # it returned a 0, therefore, success
+                print(f"{LIGHTGREEN}\t[+] {NOCOLOR}Mounted {hostnameDirectory} Successfully!")
+                return True
+            else:
+                print(f"{RED}Received error code {result} while trying to mount "
+                      f"{hostnameDirectory}, skipping this mount.{NOCOLOR}",
+                      file=sys.stderr)
+                # removing the empty directory we created
+                os.rmdir(hostnameDirectory)
+        except Exception as err:
+            print(f"Unable to mount share: //{hostnameDirectory}, error: {err}", file=sys.stderr)
 
         return False
-                    
 
     def unmount(self, shares):
-
         if re.search("READ", shares):
 
             share = re.findall(r"[\w\.\$\-]+", shares, flags=re.U)
             # use index to extract share name with spaces until READ element in list
-            N = 'READ'
-            temp = share.index(N)
+            temp = share.index(READ)
             share = share[:temp]
             share = ' '.join(share)
 
@@ -358,8 +363,7 @@ class smb:
 
             # check if dir exist
             if not os.path.exists(directory):
-                print(RED+"\t[+] "+NOCOLOR, end = '')
-                print("Can't unmount "+directory+" it doesn't exist!")
+                print(f"{RED}\t[+] {NOCOLOR} Can't unmount {directory} it doesn't exist!", file=sys.stderr)
             else:
                 try:
                     subprocess.call(['umount',directory])
@@ -369,6 +373,32 @@ class smb:
                 except:
                     print("Unable to unmount share: "+directory)
 
+def do_mounts(options, domain, password, target_var):
+    targets = []
+    if os.path.exists(target_var):  # check to see if a file was provided instead of an address
+        with open(target_var,'r') as fh:
+            targets = [line.strip() for line in fh.readlines()]
+    else:
+        targets.append(target_var)
+    for address in targets:
+        try:
+            share = smb(options, domain, username, password, address)
+            if share.create_conn_obj():
+                share.get_info()
+            else:
+                print(YELLOW+"Can't connect to "+share.hostname+NOCOLOR)
+                exit()
+
+            share.print_info()
+            share.print_host_info()
+            if username:
+                share.print_shares()
+
+        except Exception as e:
+            if logging.getLogger().level == logging.DEBUG:
+                import traceback
+                traceback.print_exc()
+            logging.error(str(e))
 
 def get_os_arch(self):
     try:
@@ -461,7 +491,7 @@ if __name__ == '__main__':
             ="Tool to list shares and/or create local dir to mount them for searching locally")
 
     parser.add_argument('target', action='store', help
-            ='[[domain/]username[:password]@]<targetName or address>')
+            ='[[domain/]username[:password]@]<targetName, address, or line-delimited file containing list of hosts>') 
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-m','-mount', action='store_true', help
@@ -515,22 +545,4 @@ if __name__ == '__main__':
     if password == '' and username != '':
         from getpass import getpass
         password = getpass("Password:")
-
-    try:
-        share = smb(options, domain, username, password, address)
-        if share.create_conn_obj():
-            share.get_info()
-        else:
-            print(YELLOW+"Can't connect to "+share.hostname+NOCOLOR)
-            exit()
-
-        share.print_info()
-        share.print_host_info()
-        if username:
-            share.print_shares()
-        
-    except Exception as e:
-        if logging.getLogger().level == logging.DEBUG:
-            import traceback
-            traceback.print_exc()
-        logging.error(str(e))
+    do_mounts(options, domain, password, address)
