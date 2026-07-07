@@ -302,6 +302,18 @@ class smb:
         os.chmod(path, 0o600)
         return path
 
+    def _local_mount_dir_exists(self, share):
+        # Check the PARENT directory's listing instead of stat-ing the mountpoint
+        # itself. If a share is mounted but the SMB connection has gone stale,
+        # stat()/os.path.exists() on the mountpoint fails and would wrongly report
+        # "doesn't exist" -- causing us to skip the very cleanup we need, or to try
+        # to recreate a directory that is already there. Reading the parent's
+        # entries never touches the (possibly dead) mounted filesystem.
+        try:
+            return share in os.listdir(self.hostname)
+        except OSError:
+            return False
+
     def mount(self, share_info):
         # Returns False only when the local directory already exists (nothing
         # attempted); True whenever a mount was attempted (success or failure is
@@ -315,7 +327,7 @@ class smb:
         server = self.ipAddress if self.ipAddress else self.hostname
         source = '//{}/{}'.format(server, share)
 
-        if os.path.exists(hostnameDirectory):
+        if self._local_mount_dir_exists(share):
             return False
 
         os.makedirs(hostnameDirectory)
@@ -365,7 +377,10 @@ class smb:
         share = share_info['name']
         directory = os.path.join(self.hostname, share)
 
-        if not os.path.exists(directory):
+        # Use the parent-listing check, NOT os.path.exists(directory): a stale
+        # mountpoint (dead SMB session) fails stat() and would look like it
+        # "doesn't exist", stranding a mount we could otherwise clean up.
+        if not self._local_mount_dir_exists(share):
             print(RED+"\t[+] "+NOCOLOR, end = '')
             print("Can't unmount "+directory+" it doesn't exist!")
             return
@@ -373,6 +388,16 @@ class smb:
         result = subprocess.run(['umount', directory],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 universal_newlines=True)
+
+        # A busy or stale mount fails a plain umount; retry with a lazy detach
+        # (umount -l), which cleanly removes stale CIFS mountpoints.
+        if result.returncode != 0:
+            lazy = subprocess.run(['umount', '-l', directory],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  universal_newlines=True)
+            if lazy.returncode == 0:
+                result = lazy
+
         if result.returncode == 0:
             print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
             print("Unmounted/Removed: "+directory)
