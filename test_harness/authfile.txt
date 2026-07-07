@@ -1,0 +1,3 @@
+username=testuser
+password=Pa,ss w0rd!@#x
+domain=WORKGROUP
