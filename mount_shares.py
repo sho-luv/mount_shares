@@ -1,13 +1,15 @@
 #!/usr/bin/python3
 
 import os
+import re
 import sys # Used by len, exit, etc
+import tempfile
 import argparse # Parser for command-line options, arguments and sub-commands
 import socket
 import logging
 import ntpath
 import subprocess
-from impacket import smb
+from impacket.smb import SMB_DIALECT
 #from impacket.smb3structs import FILE_READ_DATA # unsure if I need this...
 #from impacket.smbconnection import SessionError
 from impacket.smbconnection import SMBConnection, SessionError
@@ -126,7 +128,6 @@ class smb:
 
     def smbv3_conn(self):
         try:
-            self.conn = SMBConnection(self.hostname, self.hostname, None, self.args.port, timeout=self.args.timeout)
             self.conn = SMBConnection(self.hostname, self.hostname, sess_port=int(self.args.port), timeout=self.args.timeout)
 
             self.smbv1 = False
@@ -172,16 +173,15 @@ class smb:
         except Exception as e:
             pass
 
-        try:
-            smb_conn.logoff()
-        except:
-            pass
+        # NOTE: do not logoff here -- the connection is reused by
+        # print_shares() to enumerate shares.
 
         return True
 
 
     def print_info(self):
-        print(LIGHTBLUE+"SMB\t"+NOCOLOR+self.ipAddress+"\t"+self.args.port+"\t"+self.hostname, end = '')
+        ip = self.ipAddress if self.ipAddress else self.hostname
+        print(LIGHTBLUE+"SMB\t"+NOCOLOR+ip+"\t"+self.args.port+"\t"+self.hostname, end = '')
 
     def print_host_info(self):
         self.print_admin()
@@ -190,184 +190,200 @@ class smb:
             str(self.smbv1)+")"+NOCOLOR)
 
 
+    def _format_share(self, share_info):
+        # single source of truth for the display line
+        return u'{:<15} {:<15} {}'.format(
+            share_info['name'], ','.join(share_info['access']), share_info['remark'])
+
     def print_shares(self):
 
-            permissions = []
-            shares = []
-            output = []
+        permissions = []
 
-            for share in self.conn.listShares():
-                share_name = share['shi1_netname'][:-1]
-                share_remark = share['shi1_remark'][:-1]
-                share_info = {'name': share_name, 'remark': share_remark, 'access': []}
-                read = False
-                write = False
+        for share in self.conn.listShares():
+            share_name = share['shi1_netname'][:-1]
+            share_remark = share['shi1_remark'][:-1]
+            share_info = {'name': share_name, 'remark': share_remark, 'access': []}
 
-                try:
-                    self.conn.listPath(share_name, '*')
-                    read = True
-                    share_info['access'].append('READ')
-                except SessionError:
-                    pass
+            # Test READ access. Only ACCESS_DENIED (SessionError) means "no read";
+            # any other error is a transient/unexpected failure that must NOT abort
+            # enumeration of the remaining shares.
+            try:
+                self.conn.listPath(share_name, '*')
+                share_info['access'].append('READ')
+            except SessionError:
+                pass
+            except Exception as e:
+                logging.debug('Error listing share {}: {}'.format(share_name, e))
 
-                try:
-                    self.conn.createDirectory(share_name, "\\mytempdir_washere")
-                    self.conn.deleteDirectory(share_name, "\\mytempdir_washere")
-                    write = True
-                    share_info['access'].append('WRITE')
-                except SessionError:
-                    pass
+            # Test WRITE access the same way.
+            try:
+                self.conn.createDirectory(share_name, "\\mytempdir_washere")
+                self.conn.deleteDirectory(share_name, "\\mytempdir_washere")
+                share_info['access'].append('WRITE')
+            except SessionError:
+                pass
+            except Exception as e:
+                logging.debug('Error write-testing share {}: {}'.format(share_name, e))
 
-                permissions.append(share_info)
+            permissions.append(share_info)
 
-            for share in permissions:
-                name   = share['name']
-                remark = share['remark']
-                perms  = share['access']
+        if options.show is False:
+            self.print_info()
+            print(LIGHTGREEN+"\t[+] "+NOCOLOR+"Enumerated readable shares")
+            self.print_info()
+            print(YELLOW+"\tShare\t\tPermissions\tRemark"+NOCOLOR)
+            self.print_info()
+            print(YELLOW+"\t-----\t\t-----------\t------"+NOCOLOR)
+            for share_info in permissions:
 
-                output = (u'{:<15} {:<15} {}'.format(name, ','.join(perms), remark))
-                shares.append(''.join(output))
+                # no need to mount IPC share so we skip it!
+                if share_info['name'].upper() == 'IPC$':
+                    continue
 
-            if options.show is False:
-                self.print_info()
-                print(LIGHTGREEN+"\t[+] "+NOCOLOR+"Enumerated readable shares")
-                self.print_info()
-                print(YELLOW+"\tShare\t\tPermissions\tRemark"+NOCOLOR)
-                self.print_info()
-                print(YELLOW+"\t-----\t\t-----------\t------"+NOCOLOR)
-                for share in shares:
+                # default mode only lists/mounts shares we can read
+                if 'READ' not in share_info['access']:
+                    continue
 
-                    # no need to mount IPC share so we skip it!
-                    if re.search("IPC", share):
-                       continue
+                line = self._format_share(share_info)
 
-                    if re.search("READ", share):
-                        if options.m is True:
-                            self.print_info()
-                            print(YELLOW+"\t"+share+NOCOLOR, end='')
-                            if not self.mount(share):
-                                print(RED+"\t[+] "+NOCOLOR, end = '')
-                                print("Can't mount "+self.hostname+" because it already exist!")
-
-                        elif options.u is True:
-                            self.print_info()
-                            print(YELLOW+"\t"+share+NOCOLOR, end='')
-                            self.unmount(share)
-
-                        else:
-                            self.print_info()
-                            print(YELLOW+"\t"+share+NOCOLOR)
-
-                # clean created hostname dir
-                if options.u is True:
-                    if os.path.exists(self.hostname):
-                        if not os.listdir(self.hostname):
-                            subprocess.call(['rmdir',self.hostname])
-
-
-            else:
-                self.print_info()
-                print(LIGHTGREEN+"\t[+] "+NOCOLOR+"Enumerated all shares")
-                self.print_info()
-                print(YELLOW+"\tShare\t\tPermissions\tRemark"+NOCOLOR)
-                self.print_info()
-                print(YELLOW+"\t-----\t\t-----------\t------"+NOCOLOR)
-                for share in shares:
+                if options.m is True:
                     self.print_info()
-                    print(YELLOW+"\t"+share+NOCOLOR)
+                    print(YELLOW+"\t"+line+NOCOLOR, end='')
+                    if not self.mount(share_info):
+                        print(RED+"\t[+] "+NOCOLOR, end = '')
+                        print("Can't mount "+share_info['name']+" because it already exists!")
 
-            print(NOCOLOR)
-
-    def mount(self, shares):
-
-        if re.search("READ", shares):
-            # convert string into list
-            share = re.findall(r"[\w\.\$\-]+", shares, flags=re.U)
-
-            # use index to extract share name with spaces until READ element in list
-            N = 'READ'
-            temp = share.index(N)
-            share = share[:temp]
-            share = ' '.join(share)
-
-            # I created two variables because I wanted to name the share after the hostname
-            # however if the hostname doesn't resolve the mount command errors out
-            # so I use the IP address to mount the share and the hostname to name the local shares
-            # otherwise you have to ensure the hostname resolves in /etc/resolve.conf
-            # by adding search i.e. echo -n "search domain.local" >> /etc/resolve.conf
-            hostnameDirectory = self.hostname+"/"+share+""
-
-            # added qoutes for shares with spaces
-            ipDirectory = self.ipAddress+"/\""+share+"\""
-
-            # check if dir already exist if not make it
-            if not os.path.exists(hostnameDirectory):
-                os.makedirs(hostnameDirectory)
-
-                # check if dir is empty if not create shares and mount them
-                if not os.listdir(hostnameDirectory):
-                    try:
-                        """
-                        # need to figure out how to use createMountPoint from smbconnection.py ->
-                        # https://github.com/SecureAuthCorp/impacket/blob/a16198c3312d8cfe25b329907b16463ea3143519/impacket/smbconnection.py#L861
-                        # I want to mount a remote network share locally using the createMountPoint function. 
-                        # However I'm unsure how to use this function. It's defined as follows:
-                        # def createMountPoint(self, tid, path, target):
-                            #
-                            #creates a mount point at an existing directory
-                            #:param int tid: tree id of current connection
-                            #:param string path: directory at which to create mount point (must already exist)
-                            #:param string target: target address of mount point
-                            
-                        #smbClient.createMountPoint( smbClient, directory, hostname)
-                        """
-                        print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
-                        if not options.write:
-                            print("Mounted "+hostnameDirectory+" Successfully!")
-                            mountCommand = 'mount -r -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
-                        else:
-                            print("Mounted "+hostnameDirectory+" Successfully!", end="")
-                            print(RED+" Caution mounted WRITABLE shares!"+NOCOLOR)
-                            mountCommand = 'mount -t cifs //'+ipDirectory+' ./"'+hostnameDirectory+'" -o username='+username+',password=\''+password+'\''
-                        subprocess.call([mountCommand], shell=True, stdout=subprocess.PIPE, universal_newlines=True)
-                        return True
-                    except:
-                        print("Unable to mount share: //"+hostnameDirectory)
+                elif options.u is True:
+                    self.print_info()
+                    print(YELLOW+"\t"+line+NOCOLOR, end='')
+                    self.unmount(share_info)
 
                 else:
                     self.print_info()
-                    self.print_host_info()
-                    print(RED+"\t[+] "+NOCOLOR, end = '')
-                    print(self.hostnameDirectory+" is not empty directory. Unable to mount")
+                    print(YELLOW+"\t"+line+NOCOLOR)
 
-        return False
-                    
+            # clean created hostname dir if it ended up empty
+            if options.u is True:
+                if os.path.exists(self.hostname) and not os.listdir(self.hostname):
+                    try:
+                        os.rmdir(self.hostname)
+                    except OSError:
+                        pass
 
-    def unmount(self, shares):
+        else:
+            self.print_info()
+            print(LIGHTGREEN+"\t[+] "+NOCOLOR+"Enumerated all shares")
+            self.print_info()
+            print(YELLOW+"\tShare\t\tPermissions\tRemark"+NOCOLOR)
+            self.print_info()
+            print(YELLOW+"\t-----\t\t-----------\t------"+NOCOLOR)
+            for share_info in permissions:
+                self.print_info()
+                print(YELLOW+"\t"+self._format_share(share_info)+NOCOLOR)
 
-        if re.search("READ", shares):
+        print(NOCOLOR)
 
-            share = re.findall(r"[\w\.\$\-]+", shares, flags=re.U)
-            # use index to extract share name with spaces until READ element in list
-            N = 'READ'
-            temp = share.index(N)
-            share = share[:temp]
-            share = ' '.join(share)
+    def _write_credentials_file(self):
+        # Reuse the exact credentials that authenticated during enumeration, and
+        # hand them to mount.cifs via a 0600 credentials file rather than on the
+        # command line. This keeps the password out of `ps` output and, unlike
+        # the "-o password=" form, tolerates passwords containing commas.
+        lines = 'username={}\n'.format(username)
+        if password:
+            lines += 'password={}\n'.format(password)
+        if domain:
+            lines += 'domain={}\n'.format(domain)
 
-            directory = self.hostname+"/"+share
+        fd, path = tempfile.mkstemp(prefix='.mount_shares_cred_')
+        try:
+            os.write(fd, lines.encode('utf-8'))
+        finally:
+            os.close(fd)
+        os.chmod(path, 0o600)
+        return path
 
-            # check if dir exist
-            if not os.path.exists(directory):
-                print(RED+"\t[+] "+NOCOLOR, end = '')
-                print("Can't unmount "+directory+" it doesn't exist!")
+    def mount(self, share_info):
+        # Returns False only when the local directory already exists (nothing
+        # attempted); True whenever a mount was attempted (success or failure is
+        # reported inline).
+        share = share_info['name']
+
+        # Name the local mount point after the hostname/share. We mount using the
+        # IP address so we don't depend on name resolution, but fall back to the
+        # hostname if the host never resolved.
+        hostnameDirectory = os.path.join(self.hostname, share)
+        server = self.ipAddress if self.ipAddress else self.hostname
+        source = '//{}/{}'.format(server, share)
+
+        if os.path.exists(hostnameDirectory):
+            return False
+
+        os.makedirs(hostnameDirectory)
+
+        # Build the command as an argument list (NO shell=True). This is what makes
+        # share names containing spaces and special characters ($ & ( ) ' etc.)
+        # work correctly. Credentials go through a temp file (see below).
+        cred_path = self._write_credentials_file()
+        opts = 'credentials={}'.format(cred_path)
+        if not options.write:
+            cmd = ['mount', '-r', '-t', 'cifs', source, hostnameDirectory, '-o', opts]
+        else:
+            cmd = ['mount', '-t', 'cifs', source, hostnameDirectory, '-o', opts]
+
+        try:
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    universal_newlines=True)
+        finally:
+            # mount.cifs has already read the file by the time run() returns.
+            try:
+                os.remove(cred_path)
+            except OSError:
+                pass
+
+        if result.returncode == 0:
+            print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
+            if not options.write:
+                print("Mounted "+hostnameDirectory+" Successfully!")
             else:
-                try:
-                    subprocess.call(['umount',directory])
-                    print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
-                    print("Unmounted/Removed: "+directory)
-                    subprocess.call(['rmdir',directory])
-                except:
-                    print("Unable to unmount share: "+directory)
+                print("Mounted "+hostnameDirectory+" Successfully!", end="")
+                print(RED+" Caution mounted WRITABLE shares!"+NOCOLOR)
+        else:
+            # The mount FAILED. Remove the empty directory we just created so it
+            # doesn't masquerade as a successful-but-empty mount.
+            try:
+                os.rmdir(hostnameDirectory)
+            except OSError:
+                pass
+            error = result.stderr.strip() if result.stderr else 'mount command failed'
+            print(RED+"\t[!] "+NOCOLOR, end = '')
+            print("Unable to mount "+hostnameDirectory+": "+error)
+
+        return True
+
+
+    def unmount(self, share_info):
+        share = share_info['name']
+        directory = os.path.join(self.hostname, share)
+
+        if not os.path.exists(directory):
+            print(RED+"\t[+] "+NOCOLOR, end = '')
+            print("Can't unmount "+directory+" it doesn't exist!")
+            return
+
+        result = subprocess.run(['umount', directory],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                universal_newlines=True)
+        if result.returncode == 0:
+            print(LIGHTGREEN+"\t[+] "+NOCOLOR, end = '')
+            print("Unmounted/Removed: "+directory)
+            try:
+                os.rmdir(directory)
+            except OSError:
+                pass
+        else:
+            error = result.stderr.strip() if result.stderr else 'umount command failed'
+            print(RED+"\t[!] "+NOCOLOR, end = '')
+            print("Unable to unmount "+directory+": "+error)
 
 
 def get_os_arch(self):
@@ -379,7 +395,7 @@ def get_os_arch(self):
         dce.connect()
         try:
             dce.bind(MSRPC_UUID_PORTMAP, transfer_syntax=('71710533-BEBA-4937-8319-B5DBEF9CCC36', '1.0'))
-        except (DCERPCException, e):
+        except DCERPCException as e:
             if str(e).find('syntaxes_not_supported') >= 0:
                 dce.disconnect()
                 return "x32"
@@ -445,7 +461,7 @@ def load_smbclient_auth_file(path):
 
 if __name__ == '__main__':
 
-    banner = """
+    banner = r"""
         x-----------x
         | MOUNT     |
         | THEM      |
@@ -495,7 +511,8 @@ if __name__ == '__main__':
 
     options = parser.parse_args()
 
-    import re
+    if options.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
 
     domain, username, password, address = re.compile('(?:(?:([^/@:]*)/)?([^@:]*)(?::([^@]*))?@)?(.*)').match(
         options.target).groups('')
